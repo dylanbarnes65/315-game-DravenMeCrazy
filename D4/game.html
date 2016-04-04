@@ -20,6 +20,7 @@
     //physics interactions
     var platforms;
     var background;
+    var weapons = [];
     
     //menus
     var upgrade_menu;
@@ -58,6 +59,7 @@
 
         Phaser.Sprite.call(this, game, 0, 0, key);
         
+        
         this.texture.baseTexture.scaleMode = PIXI.scaleModes.NEAREST;
 
         this.anchor.set(0.5);
@@ -74,13 +76,13 @@
     Bullet.prototype = Object.create(Phaser.Sprite.prototype);
     Bullet.prototype.constructor = Bullet;
 
-    Bullet.prototype.fire = function (x, y, angle, speed, gx, gy) {
+    Bullet.prototype.fire = function (x, y, angle, speed, gx, gy, statement) {
 
         gx = gx || 0;
         gy = gy || 0;
         
-        this.enableBody = true;
         this.reset(x, y);
+        this.enableBody = true;
         this.scale.set(1);
         this.physicsBodyType = Phaser.Physics.ARCADE;
         this.game.physics.arcade.velocityFromAngle(angle, speed, this.body.velocity);
@@ -120,6 +122,7 @@
         this.nextFire = 0;
         this.bulletSpeed = 600;
         this.fireRate = 100;
+        this.enableBody = true;
 
         for (var i = 0; i < 64; i++)
         {
@@ -136,11 +139,13 @@
     Weapon.SingleBullet.prototype.fire = function (source) {
 
         if (this.game.time.time < this.nextFire) { return; }
+        
 
         var x = source.x + 50;
         var y = source.y + 50;
-
-        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0);
+        
+        this.enableBody = true;
+        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0,true);
 
         this.nextFire = this.game.time.time + this.fireRate;
 
@@ -177,7 +182,7 @@
         var x = source.x + 50;
         var y = (source.y + source.height / 2) + this.game.rnd.between(-10, 10);
 
-        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0);
+        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0,true);
 
         this.nextFire = this.game.time.time + this.fireRate;
 
@@ -217,7 +222,7 @@
         var x = source.x + 60;
         var y = source.y + 60;
 
-        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0);
+        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0,true);
 
         this.nextFire = this.game.time.time + this.fireRate;
 
@@ -253,7 +258,7 @@
             
             //characters
             this.load.image('alien_sprite', 'assets/alien_sprite.png');
-            this.load.image('mob_sprite','assets/mob_sprite.png');
+            this.load.spritesheet('mob_sprite','assets/mob_sprite.png');
             
             //projectiles
             this.load.spritesheet('rifle_projectile','assets/rifle_projectile.png');
@@ -283,11 +288,12 @@
 
             background = game.add.sprite(0,0,'space_background');  //makes the background
             
-            
             this.add.sprite(0, 0, 'bothotbar_sprite');//makes bottom hotbar
             this.add.sprite(0, 0, 'lanes_top_sprite');//makes top and lanes
             this.add.sprite(0, 0, 'wall_moblane_sprite');//makes wall and moblanes
 
+            weapons = game.add.group();
+            weapons.enableBody = true
             this.weapons.push(new Weapon.SingleBullet(this.game));
             this.weapons.push(new Weapon.ScatterShot(this.game));
             this.weapons.push(new Weapon.Rockets(this.game));
@@ -405,6 +411,7 @@
             }
             else
             {
+                this.weapons[this.currentWeapon].enableBody = true;
                 this.weapons[this.currentWeapon].visible = false;
                 this.weapons[this.currentWeapon].callAll('reset', null, 0, 0);
                 this.weapons[this.currentWeapon].setAll('exists', false);
@@ -419,6 +426,7 @@
             }
 
             this.weapons[this.currentWeapon].visible = true;
+            this.weapons[this.currentWeapon].enableBody = true;
 
             this.weaponName.text = this.weapons[this.currentWeapon].name;
 
@@ -513,7 +521,10 @@
                 this.weapons[this.currentWeapon].fire(this.player2);
             }
             
-            this.physics.arcade.overlap(Weapon.SingleBullet,mob,collidehandler,null,this);
+            var statement = this.physics.arcade.overlap(this.weapons[this.currentWeapon],mob,collidehandler,null,this);
+            
+            console.log(statement);
+            
 
         }
 
@@ -521,11 +532,11 @@
 
     game.state.add('Game', PhaserGame, true);
     
-    var text1 = game.add.text(100,100, "HITTING");
+    //var text1 = game.add.text(100,100, "HITTING");
     
-    function collidehandler(Weapon , mobs)
+    function collidehandler(projectile , mobs)
     {
-        text1.visible =! text1.visible;
+        //text1.visible =! text1.visible;
         mobs.kill();
     }
     
