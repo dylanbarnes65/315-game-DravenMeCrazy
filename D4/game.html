@@ -1,1 +1,577 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Game</title>
+    <meta charset="utf-8">
+    <script src="//cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"></script>
+</head>
+<body>
 
+    <div id="game"></div>
+
+    <script type="text/javascript">
+
+    var game = new Phaser.Game(1920, 900, Phaser.AUTO, 'game');
+
+    //players
+    var player1;
+    var player2;
+    
+    //physics interactions
+    var platforms;
+    var background;
+    
+    //menus
+    var upgrade_menu;
+    var option_menu;
+    var help_menu;
+    
+    //controls
+    var cursors;
+    var upKey1;
+    var downKey1;
+    var upKey2;
+    var downKey2;
+    var fireKey;
+    var hotKey1;
+    var hotKey2;
+    var hotKey3;
+    var hotKey4;
+    var helpKey;
+    var upgradeKey;
+    var optKey;
+    var muteKey;
+
+    //buttons
+    var upgradeButton;
+    var helpButton;
+    var optionButton;
+    
+    // enemies
+    var mob;
+
+    //  Our core Bullet class
+    //  This is a simple Sprite object that we set a few properties on
+    //  It is fired by all of the Weapon classes
+
+    var Bullet = function (game, key) {
+
+        Phaser.Sprite.call(this, game, 0, 0, key);
+        
+        this.texture.baseTexture.scaleMode = PIXI.scaleModes.NEAREST;
+
+        this.anchor.set(0.5);
+
+        this.checkWorldBounds = true;
+        this.outOfBoundsKill = true;
+        this.exists = false;
+
+        this.tracking = false;
+        this.scaleSpeed = 0;
+
+    };
+
+    Bullet.prototype = Object.create(Phaser.Sprite.prototype);
+    Bullet.prototype.constructor = Bullet;
+
+    Bullet.prototype.fire = function (x, y, angle, speed, gx, gy) {
+
+        gx = gx || 0;
+        gy = gy || 0;
+        
+        this.enableBody = true;
+        this.reset(x, y);
+        this.scale.set(1);
+        this.physicsBodyType = Phaser.Physics.ARCADE;
+        this.game.physics.arcade.velocityFromAngle(angle, speed, this.body.velocity);
+
+        this.angle = angle;
+
+        this.body.gravity.set(gx, gy);
+
+    };
+
+    Bullet.prototype.update = function () {
+
+        if (this.tracking)
+        {
+            this.rotation = Math.atan2(this.body.velocity.y, this.body.velocity.x);
+            this.enableBody = true;
+        }
+
+        if (this.scaleSpeed > 0)
+        {
+            this.scale.x += this.scaleSpeed;
+            this.scale.y += this.scaleSpeed;
+        }
+
+    };
+
+    var Weapon = {};
+
+    ////////////////////////////////////////////////////
+    //  A single bullet is fired in front of the ship //
+    ////////////////////////////////////////////////////
+
+    Weapon.SingleBullet = function (game) {
+ 
+        Phaser.Group.call(this, game, game.world, 'Single Bullet', false, true, Phaser.Physics.ARCADE);
+
+        this.nextFire = 0;
+        this.bulletSpeed = 600;
+        this.fireRate = 100;
+
+        for (var i = 0; i < 64; i++)
+        {
+            this.add(new Bullet(game, 'rifle_projectile'), true);
+        }
+
+        return this;
+
+    };
+
+    Weapon.SingleBullet.prototype = Object.create(Phaser.Group.prototype);
+    Weapon.SingleBullet.prototype.constructor = Weapon.SingleBullet;
+
+    Weapon.SingleBullet.prototype.fire = function (source) {
+
+        if (this.game.time.time < this.nextFire) { return; }
+
+        var x = source.x + 50;
+        var y = source.y + 50;
+
+        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0);
+
+        this.nextFire = this.game.time.time + this.fireRate;
+
+    };
+
+    ////////////////////////////////////////////////////
+    //  Bullets are fired out scattered on the y axis //
+    ////////////////////////////////////////////////////
+
+    Weapon.ScatterShot = function (game) {
+
+        Phaser.Group.call(this, game, game.world, 'Scatter Shot', false, true, Phaser.Physics.ARCADE);
+
+        this.nextFire = 0;
+        this.bulletSpeed = 600;
+        this.fireRate = 40;
+
+        for (var i = 0; i < 120; i++)
+        {
+            this.add(new Bullet(game, 'machine_projectile'), true);
+        }
+
+        return this;
+
+    };
+
+    Weapon.ScatterShot.prototype = Object.create(Phaser.Group.prototype);
+    Weapon.ScatterShot.prototype.constructor = Weapon.ScatterShot;
+
+    Weapon.ScatterShot.prototype.fire = function (source) {
+
+        if (this.game.time.time < this.nextFire) { return; }
+
+        var x = source.x + 50;
+        var y = (source.y + source.height / 2) + this.game.rnd.between(-10, 10);
+
+        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0);
+
+        this.nextFire = this.game.time.time + this.fireRate;
+
+    };
+
+
+    ///////////////////////////////////////////////////////////////////
+    //  Rockets that visually track the direction they're heading in //
+    ///////////////////////////////////////////////////////////////////
+
+    Weapon.Rockets = function (game) {
+
+        Phaser.Group.call(this, game, game.world, 'Rockets', false, true, Phaser.Physics.ARCADE);
+
+        this.nextFire = 0;
+        this.bulletSpeed = 400;
+        this.fireRate = 1000;
+
+        for (var i = 0; i < 32; i++)
+        {
+            this.add(new Bullet(game, 'rocket_projectile'), true);
+        }
+
+        this.setAll('tracking', true);
+
+        return this;
+
+    };
+
+    Weapon.Rockets.prototype = Object.create(Phaser.Group.prototype);
+    Weapon.Rockets.prototype.constructor = Weapon.Rockets;
+
+    Weapon.Rockets.prototype.fire = function (source) {
+
+        if (this.game.time.time < this.nextFire) { return; }
+
+        var x = source.x + 60;
+        var y = source.y + 60;
+
+        this.getFirstExists(false).fire(x, y, 0, this.bulletSpeed, 0, 0);
+
+        this.nextFire = this.game.time.time + this.fireRate;
+
+    };
+
+    //  The core game loop
+
+    var PhaserGame = function () {
+
+        //this.background = null;
+
+        this.player1 = null;
+        this.player2 = null;
+        this.cursors = null;
+        this.speed = 300;
+
+        this.weapons = [];
+        this.currentWeapon = 0;
+        this.weaponName = null;
+
+    };
+
+    PhaserGame.prototype = {
+
+        preload: function () {
+
+            var asset_location = 'assets/'; //uncomment for cloud9
+            //var asset_location = ''; //uncomment for compute
+            
+            this.load.crossOrigin = 'anonymous';
+
+            this.load.image('space_background', 'assets/space_background.jpg');
+            
+            //characters
+            this.load.image('alien_sprite', 'assets/alien_sprite.png');
+            this.load.image('mob_sprite','assets/mob_sprite.png');
+            
+            //projectiles
+            this.load.spritesheet('rifle_projectile','assets/rifle_projectile.png');
+            this.load.spritesheet('machine_projectile','assets/machine_projectile.png');
+            this.load.spritesheet('rocket_projectile','assets/rocket_projectile.png');
+            
+            //UI 
+            game.load.image('bottom_boundry', 'assets/bottom_boundry.png');
+            game.load.image('bothotbar_sprite','assets/bothotbar_sprite.png');
+            game.load.image('lanes_top_sprite','assets/lanes_top_sprite.png');
+            game.load.image('wall_moblane_sprite','assets/wall_moblane_sprite.png');
+            
+            //buttons
+            game.load.spritesheet('upgrade_button_spritesheet', 'assets/upgrade_button_spritesheet.png', 193, 80);
+            game.load.spritesheet('option_button_spritesheet', 'assets/option_button_spritesheet.png', 193, 80);
+            game.load.spritesheet('help_button_spritesheet', 'assets/help_button_spritesheet.png', 193, 80);
+            
+            //menus
+            game.load.image('upgrade_menu', 'assets/upgrade_menu.png');
+            game.load.image('option_menu', 'assets/options_menu.png');
+            game.load.image('help_menu', 'assets/help_menu.png');
+
+        },
+
+        create: function () {
+            this.physics.startSystem(Phaser.Physics.ARCADE);  //gives the game aracde phycis
+
+            background = game.add.sprite(0,0,'space_background');  //makes the background
+            
+            
+            this.add.sprite(0, 0, 'bothotbar_sprite');//makes bottom hotbar
+            this.add.sprite(0, 0, 'lanes_top_sprite');//makes top and lanes
+            this.add.sprite(0, 0, 'wall_moblane_sprite');//makes wall and moblanes
+
+            this.weapons.push(new Weapon.SingleBullet(this.game));
+            this.weapons.push(new Weapon.ScatterShot(this.game));
+            this.weapons.push(new Weapon.Rockets(this.game));
+            
+             //makes upgrade button
+            upgradeButton = game.add.button(game.world.centerX -100, game.world.height - 100,'upgrade_button_spritesheet', upgradeClick, this, 2, 1, 0); //2, 1, 0 are frames of spritesheet
+            upgradeButton.onInputOver.add(overUpgrade, this); //when button is hovered over
+            upgradeButton.onInputOut.add(outUpgrade, this); //when button is not hovered over over
+            upgradeButton.onInputUp.add(upUpgrade, this); //when finished clicking
+            
+            optionButton = game.add.button(game.world.width - 150, game.world.height - 100,'option_button_spritesheet', optionClick, this, 2, 1, 0); //2, 1, 0 are frames of spritesheet
+            optionButton.onInputOver.add(overOption, this); //when button is hovered over
+            optionButton.onInputOut.add(outOption, this); //when button is not hovered over over
+            optionButton.onInputUp.add(upOption, this); //when finished clicking
+            
+            helpButton = game.add.button(game.world.width - 350, game.world.height - 100,'help_button_spritesheet', helpClick, this, 2, 1, 0); //2, 1, 0 are frames of spritesheet
+            helpButton.onInputOver.add(overHelp, this); //when button is hovered over
+            helpButton.onInputOut.add(outHelp, this); //when button is not hovered over over
+            helpButton.onInputUp.add(upHelp, this); //when finished clicking
+
+            //weapon switching
+            this.currentWeapon = 0;
+            for (var i = 1; i < this.weapons.length; i++)
+            {
+                this.weapons[i].visible = false;
+            }
+            
+            //  We will enable physics for any object that is created in this group
+            platforms = game.add.group();
+            platforms.enableBody = true;
+    
+            //Here we create the ground and ceiling.
+            var ground = platforms.create(0, game.world.height - 120, 'bottom_boundry'); //bottom boundary
+            ground.body.immovable = true;
+            ground.scale.setTo(2, 2);
+            ground = platforms.create(0,game.world.height-1100, 'bottom_boundry'); //top boundary
+            ground.body.immovable = true;
+            ground.scale.setTo(2, 2);
+
+            // creating players and giving them physics
+            this.player1 = this.add.sprite(17,game.world.height-500, 'alien_sprite');
+            this.physics.arcade.enable(this.player1);
+            
+            this.player2 = this.add.sprite(110,game.world.height-500, 'alien_sprite');
+            this.physics.arcade.enable(this.player2);
+
+            this.player1.body.gravity.y = 0;
+            this.player1.body.collideWorldBounds = true;
+            
+            this.player2.body.gravity.y = 0;
+            this.player2.body.collideWorldBounds = true;
+
+            
+            //eneimes 
+            
+            mob = game.add.group();
+            mob.enableBody = true;
+            mob.physicsBodyType = Phaser.Physics.ARCADE;
+
+            mob.create(1500,game.world.height-500, 'mob_sprite');
+
+            //  Cursor keys to fly + space to fire
+            this.cursors = this.input.keyboard.createCursorKeys();
+
+            this.input.keyboard.addKeyCapture([ Phaser.Keyboard.SPACEBAR ]);
+
+            //  keybindings and controls
+            cursors = game.input.keyboard.createCursorKeys();
+            //up
+            upKey1 = game.input.keyboard.addKey(Phaser.Keyboard.UP);
+            upKey2 = game.input.keyboard.addKey(Phaser.Keyboard.W);
+            //down
+            downKey1 = game.input.keyboard.addKey(Phaser.Keyboard.DOWN);
+            downKey2 = game.input.keyboard.addKey(Phaser.Keyboard.S);
+            //space
+            fireKey = game.input.keyboard.addKey(Phaser.Keyboard.SPACE);
+            //hotbar_keys
+            hotKey1 = game.input.keyboard.addKey(Phaser.Keyboard.ONE);
+            hotKey2 = game.input.keyboard.addKey(Phaser.Keyboard.TWO);
+            hotKey3 = game.input.keyboard.addKey(Phaser.Keyboard.THREE);
+            hotKey4 = game.input.keyboard.addKey(Phaser.Keyboard.FOUR);
+            //upgrades menu
+            upgradeKey = game.input.keyboard.addKey(Phaser.Keyboard.U);
+            //help menu
+            helpKey = game.input.keyboard.addKey(Phaser.Keyboard.H);
+            //options
+            optKey = game.input.keyboard.addKey(Phaser.Keyboard.ESC);
+            //mute
+            muteKey = game.input.keyboard.addKey(Phaser.Keyboard.M);
+            
+            //weapons switching
+            hotKey1.onDown.add(this.nextWeapon, this);
+            hotKey2.onDown.add(this.nextWeapon2, this);
+            hotKey3.onDown.add(this.nextWeapon3, this);
+            
+            //add menu overlays
+            upgrade_menu = game.add.image(game.world.centerX- 400, game.world.centerY- 400, 'upgrade_menu'); //makes upgrade menu
+            upgrade_menu.visible =! upgrade_menu.visible;
+            
+            option_menu = game.add.image(game.world.centerX- 400, game.world.centerY- 400, 'option_menu');
+            option_menu.visible =! option_menu.visible;
+            
+            help_menu = game.add.image(game.world.centerX- 400, game.world.centerY- 400, 'help_menu');
+            help_menu.visible =! help_menu.visible;
+
+        },
+
+        nextWeapon: function () {
+
+            //  Tidy-up the current weapon
+            
+            if (this.currentWeapon > 3)
+            {
+                this.weapons[this.currentWeapon].reset();
+            }
+            else
+            {
+                this.weapons[this.currentWeapon].visible = false;
+                this.weapons[this.currentWeapon].callAll('reset', null, 0, 0);
+                this.weapons[this.currentWeapon].setAll('exists', false);
+            }
+
+            //  Activate the new one
+            this.currentWeapon = 0;
+
+            if (this.currentWeapon === this.weapons.length)
+            {
+                this.currentWeapon = 0;
+            }
+
+            this.weapons[this.currentWeapon].visible = true;
+
+            this.weaponName.text = this.weapons[this.currentWeapon].name;
+
+        },
+        
+        
+        nextWeapon2: function () {
+
+            //  Tidy-up the current weapon
+            
+            //this.player = this.add.sprite(0, 50, 'mob_sprite');
+            
+            if (this.currentWeapon > 3)
+            {
+                this.weapons[this.currentWeapon].reset();
+            }
+            else
+            {
+                this.weapons[this.currentWeapon].visible = false;
+                this.weapons[this.currentWeapon].callAll('reset', null, 0, 0);
+                this.weapons[this.currentWeapon].setAll('exists', false);
+            }
+
+            //  Activate the new one
+            this.currentWeapon = 1;
+
+            if (this.currentWeapon === this.weapons.length)
+            {
+                this.currentWeapon = 0;
+            }
+
+            this.weapons[this.currentWeapon].visible = true;
+
+            this.weaponName.text = this.weapons[this.currentWeapon].name;
+
+        },
+        
+        nextWeapon3: function () {
+
+            //  Tidy-up the current weapon
+            
+            if (this.currentWeapon > 3)
+            {
+                this.weapons[this.currentWeapon].reset();
+            }
+            else
+            {
+                this.weapons[this.currentWeapon].visible = false;
+                this.weapons[this.currentWeapon].callAll('reset', null, 0, 0);
+                this.weapons[this.currentWeapon].setAll('exists', false);
+            }
+
+            //  Activate the new one
+            this.currentWeapon = 2;
+
+            if (this.currentWeapon === this.weapons.length)
+            {
+                this.currentWeapon = 0;
+            }
+
+            this.weapons[this.currentWeapon].visible = true;
+
+            this.weaponName.text = this.weapons[this.currentWeapon].name;
+
+        },
+        
+
+        update: function () {
+
+            //  Collide the player1 and the stars with the platforms
+            this.physics.arcade.collide(player1, platforms);
+            this.physics.arcade.collide(player2, platforms);
+
+            this.player1.body.velocity.set(0);
+            this.player2.body.velocity.set(0);
+            
+            if (upKey1.isDown || upKey2.isDown)
+            {
+                this.player1.body.velocity.y = -this.speed;
+                this.player2.body.velocity.y = -this.speed;
+            }
+            
+            else if (downKey1.isDown || downKey2.isDown)
+            {
+                this.player1.body.velocity.y = this.speed;
+                this.player2.body.velocity.y = this.speed;
+            }
+
+            if (this.input.keyboard.isDown(Phaser.Keyboard.SPACEBAR))
+            {
+                this.weapons[this.currentWeapon].fire(this.player1);
+                this.weapons[this.currentWeapon].fire(this.player2);
+            }
+            
+            this.physics.arcade.overlap(Weapon.SingleBullet,mob,collidehandler,null,this);
+
+        }
+
+    };
+
+    game.state.add('Game', PhaserGame, true);
+    
+    var text1 = game.add.text(100,100, "HITTING");
+    
+    function collidehandler(Weapon , mobs)
+    {
+        text1.visible =! text1.visible;
+        mobs.kill();
+    }
+    
+    
+    //buttons
+    function upgradeClick(){
+        //on click pull up Upgrade Menu
+        upgrade_menu.visible =! upgrade_menu.visible;
+        //now start displaying upgrade menu
+    }
+    function overUpgrade(){
+        //highlight upgrade button
+    }
+    function outUpgrade(){
+         //un-highlight upgrade button
+    }
+    function upUpgrade(){
+       console.log('button up', arguments);
+    }
+    
+    
+    function optionClick(){
+        option_menu.visible =! option_menu.visible;
+    }
+    function overOption(){
+    }
+    function outOption(){
+    }
+    function upOption(){
+       console.log('button up', arguments);
+    }
+    
+    function helpClick(){
+        help_menu.visible =! help_menu.visible;
+    }
+    function overHelp(){
+    }
+    function outHelp(){
+    }
+    function upHelp(){
+       console.log('button up', arguments);
+    }
+
+
+    </script>
+
+
+</body>
+</html>
